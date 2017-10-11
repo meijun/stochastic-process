@@ -1,0 +1,217 @@
+---
+title: 'Project 1: Simulations of Monty Hall Problem'
+author: "Jun Mei"
+date: "October 11, 2017"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+
+## Variant 1
+
+In variant 1, when Monty has choice on picking the door, he picks door 2 with probability $p$, and door 3 with probability $1-p$. Now besides the strategies of switching and no switching, you (the contestant) have the third option on your strategy:
+
+- You first pick the door 1.
+- If the door 2 is opened, you do not switch.
+- If the door 3 is opened, you switch.
+
+What is the winning probability with this strategy? In simulation, test scenarios with $p = 0.3, 0.5, 0.8$.
+
+### Solution
+
+#### Math Part
+
+Let $W$ be the event of the winning. Let $D_i$ be the event that the door $i$ is opened. Let $C_i$ be the event that the coor is behind door $i$. We have
+
+$$\begin{aligned}
+  P(W) &= P(WD_2) + P(WD_3)\\
+  &= P(WD_2C_1) + P(WD_3C_2)\\
+  &= \frac{1}{3}p + \frac{1}{3}.
+\end{aligned}$$
+
+```{r include=FALSE}
+pw <- function(p) 1/3 * p + 1/3
+```
+
+So $P(W|p=0.3)=`r pw(0.3)`$, $P(W|p=0.5)=`r pw(0.5)`$, $P(W|p=0.8)=`r pw(0.8)`$.
+
+#### Simulation Part
+
+Now, we run simulations to check our mathematic analysis.
+
+```{r}
+sim_pw <- function(p) {
+  n <- 10^5
+  car <- sample(3,n,replace = TRUE)
+  # For simplicity of notations, we always choose door 1.
+  opened <- rep(0,n)
+  opened[car == 1] <- sample(c(2,3),sum(car==1),replace = TRUE,prob = c(p,1-p))
+  opened[car == 2] <- 3
+  opened[car == 3] <- 2
+  chosen <- rep(0,n)
+  chosen[opened == 2] <- 1  # opened door is 2, we do not switch
+  chosen[opened == 3] <- 2  # opened door is 3, we switch
+  sum(chosen == car)/n
+}
+cat(paste("sim_pw(0.3)=",pw3 <- sim_pw(0.3),"\n",
+          "sim_pw(0.5)=",pw5 <- sim_pw(0.5),"\n",
+          "sim_pw(0.8)=",pw8 <- sim_pw(0.8),sep = ""))
+```
+
+So the simulation results are $\widetilde P(W|p=0.3)=`r pw3`$, $\widetilde P(W|p=0.5)=`r pw5`$ and $\widetilde P(W|p=0.8)=`r pw8`$.
+
+## Variant 2
+
+As before, Monty shows you three identical doors. One contains a car, the other two contain goats. You choose one of the doors but do not open it. This time, however, Monty does not know the location of the car. He randomly chooses one of the two doors different from your selection and opens it. The door turns out to conceal a goat. He now gives you the options either of sticking with your original door or switching to the other one. What should you do? Use simulation results to show your strategy and corresponding winning probability.
+
+### Solution
+
+#### Math Part
+
+As before, we assume that we choose door 1 first. Let $W$ be the event of the winning. Let $S$ be the event of switching. Let $G$ be the event that Monty randomly opened a goat door. The winning probability of switching is
+
+$$\begin{aligned}
+  P(SW|G) &= \frac{P(SWG)}{P(G)}\\
+  &= \frac{\frac{2}{3}\frac{1}{2}}{\frac{2}{3}}\\
+  &= \frac{1}{2}.
+\end{aligned}$$
+
+The winning probability of not switching is $P(S^cW|G) = 1-P(SW|G) = \frac{1}{2}$, because the two events are mutually exclusive.
+
+#### Simulation Part
+
+Now, we run simulations to check our mathematic analysis.
+
+```{r}
+n <- 10^5
+car <- sample(3,n,replace = TRUE)
+monty <- sample(c(2,3),n,replace = TRUE)
+monty_goat <- monty != car
+win_sw <- monty_goat & car != 1  # win if switch?
+win_not_sw <- monty_goat & car == 1  # win if not switch?
+cat(paste("    p_sw=",p_sw <- sum(win_sw)/sum(monty_goat),"\n",
+          "p_not_sw=",p_not_sw <- sum(win_not_sw)/sum(monty_goat),sep = ""))
+```
+
+So the simulation results are $\widetilde P(SW|G) = `r p_sw`$ and $\widetilde P(S^cW|G) = `r p_not_sw`$.
+
+## Variant 3
+
+As before, you are shown three equally likely doors. You choose door one. Monty now points to door two but does not open it. Instead he merely tells you that it conceals a goat. You know that in those cases where the car really is behind door one, Monty chooses randomly between door two and door three. You also know that when the car is behind door two or door three, it is Monty's intention to identify the car's location, but that his assertions regarding the location of the car are only correct with probability $p$, What should you do now? Use simulation results to show your strategy and corresponding winning probability. Test scenarios with $p = 0.3, 0.5, 0.8$.
+
+### Solution
+
+#### Math Part
+
+Let $W$ be the event of the winning. Let $S$ be the event of switching. Let $M$ be the event that Monty is correct. Let $C_i$ be the event that the car is behind door $i$. Let $D_i$ be the event that Monty points to door $i$. The winning probability of switching is
+
+$$\begin{aligned}
+  P(SW|D_2) &= P(SWC_3M|D_2)\\
+  &= \frac{P(SWC_3D_2M)}{P(D_2)}\\
+  &= \frac{P(SWC_3D_2M)}{P(C_1D_2)+P(C_2D_2M^c)+P(C_3D_2M)}\\
+  &= \frac{\frac{1}{3}p}{\frac{1}{3}\frac{1}{2}+\frac{1}{3}(1-p)+\frac{1}{3}p}\\
+  &= \frac{2}{3}p.
+\end{aligned}$$
+
+Let $D$ be the event that Monty points to door 2. The winning probability of not switching is
+
+$$\begin{aligned}
+  P(S^cW|D_2) &= P(S^cWC_1|D_2)\\
+  &= \frac{P(S^cWC_1D_2)}{P(D_2)}\\
+  &= \frac{\frac{1}{3}\frac{1}{2}}{\frac{1}{2}}\\
+  &= \frac{1}{3}.
+\end{aligned}$$
+
+```{r include=FALSE}
+p_sw <- function(p) 2/3*p
+p_not_sw <- function(p) 1/3
+```
+So
+$$P(SW|D_2,p=0.3)=`r p_sw(0.3)`, P(S^cW|D_2,p=0.3)=`r p_not_sw(0.3)`;$$
+$$P(SW|D_2,p=0.3)=`r p_sw(0.3)`, P(S^cW|D_2,p=0.5)=`r p_not_sw(0.5)`;$$
+$$P(SW|D_2,p=0.8)=`r p_sw(0.8)`, P(S^cW|D_2,p=0.8)=`r p_not_sw(0.8)`.$$
+
+#### Simulation Part
+
+Now, we run simulations to check our mathematic analysis.
+
+```{r}
+sim_var3 <- function(p) {
+  n <- 10^5
+  car <- sample(3,n,replace = TRUE)
+  point <- rep(0,n)
+  point[car==1] <- sample(c(2,3),sum(car==1),replace = TRUE)
+  point[car==2] <- sample(c(2,3),sum(car==2),replace = TRUE,prob = c(1-p,p))
+  point[car==3] <- sample(c(2,3),sum(car==3),replace = TRUE,prob = c(p,1-p))
+  p2 <- point==2
+  win_sw <- p2 & car==3  # win if switch?
+  win_not_sw <- p2 & car==1  # win if not switch?
+  c(sum(win_sw)/sum(p2),sum(win_not_sw)/sum(p2))
+}
+sim3 <- sim_var3(0.3)
+sim5 <- sim_var3(0.5)
+sim8 <- sim_var3(0.8)
+cat(paste("Case p=0.3: ","p_sw=",sim3[1],", p_not_sw=",sim3[2],"\n",
+          "Case p=0.5: ","p_sw=",sim5[1],", p_not_sw=",sim5[2],"\n",
+          "Case p=0.8: ","p_sw=",sim8[1],", p_not_sw=",sim8[2],"\n",sep = ""))
+```
+
+So the simulation results are
+
+$$\widetilde P(SW|D_2,p=0.3)=`r sim3[1]`, \widetilde P(S^cW|D_2,p=0.3)=`r sim3[2]`;$$
+$$\widetilde P(SW|D_2,p=0.5)=`r sim5[1]`, \widetilde P(S^cW|D_2,p=0.5)=`r sim5[2]`;$$
+$$\widetilde P(SW|D_2,p=0.8)=`r sim8[1]`, \widetilde P(S^cW|D_2,p=0.8)=`r sim8[2]`.$$
+
+Our strategy is that switch if $p>0.5$, otherwise do not switch.
+
+## Variant 4
+
+Suppose the car is not placed randomly behind the three doors. Instead, the car is behind door one with probability $p_1$, behind door two with probability $p_2$, and behind door three with probability $p_3$. Here $p_1 + p_2 + p_3 = 1$ and $p1 \geq p2 \geq p3 > 0$. You are to choose one of the three doors, after which Monty will open a door he knows to conceal a goat. Monty always chooses randomly from among his options in those cases where your initial choice is correct. What strategy should you follow? Use simulation results to show your strategy and corresponding winning probability. Test scenarios with $p_1 = 0.5, p_2 = 0.3, p_3 = 0.2$.
+
+### Solution
+
+#### Math Part
+
+#### Simulation Part
+
+Now, we run simulations to check our mathematic analysis.
+
+## Variant 5
+
+This time we assume there are $n$ identical doors, where $n$ is an integer satisfying $n \geq 3$. One door conceals a car, the other $n - 1$ doors conceal goats. You choose one of the doors at random but do not open it. Monty then opens a door he knows to conceal a goat, always choosing randomly among the available doors. At this point he gives you the option either of sticking with your original door or switching to one of the remaining doors. You make your decision. Monty now eliminates another goat-concealing door (at random) and once more gives you the choice either of sticking or switching. This process continues until only two doors remain in play. What strategy should you follow to maximize your chances of winning? Use simulation results to show your strategy and corresponding winning probability. Test scenarios with $n = 100,1000$.
+
+- ``Switch at the last minute'' (SLM) strategy: stick with your initial choice until only two doors remain, and then switch. Under the SLM strategy, What is the probability of getting the car?
+- ``Switching all the time'' (SAT) strategy: every time Monty reveals a goat, we select randomly from among the unopened doors different from our current choice. Under the SLM strategy, What is the probability of getting the car?
+
+### Solution
+
+#### Math Part
+
+#### Simulation Part
+
+Now, we run simulations to check our mathematic analysis.
+
+## Variant 6
+
+As before, this time we still have $n$ doors, but now there are $1 \leq j \leq n - 2$ cars and $n - j$ goats. After making your initial choice, Monty opens one of the other doors at random. Should you switch? Use simulation results to show your strategy and corresponding winning probability. Test scenarios with $n = 100,j = 20; n = 100, j = 50; n = 100, j = 70$.
+
+### Solution
+
+#### Math Part
+
+#### Simulation Part
+
+Now, we run simulations to check our mathematic analysis.
+
+## Variant 7
+
+As before, this time we still have $n$ doors, but now there are $1 \leq j \leq n - 2$ cars and $n - j$ goats. This time, however, after making your initial choice, Monty opens $m$ doors at random, revealing $k$ cars and $m - k$ goats. What should we do? Use simulation results to show your strategy and corresponding winning probability. Test scenarios with $(n, j, m, k) = (100, 10, 15, 3); (100, 50, 30, 15)$.
+
+### Solution
+
+#### Math Part
+
+#### Simulation Part
+
+Now, we run simulations to check our mathematic analysis.
