@@ -7,7 +7,9 @@ output:
   html_document:
     df_print: paged
 ---
-
+```{r include=FALSE}
+pf <- function(f) sprintf("%f", f)
+```
 ## Variant 1
 
 In variant 1, when Monty has choice on picking the door, he picks door 2 with probability $p$, and door 3 with probability $1-p$. Now besides the strategies of switching and no switching, you (the contestant) have the third option on your strategy:
@@ -22,7 +24,7 @@ What is the winning probability with this strategy? In simulation, test scenario
 
 #### Math Part
 
-Let $W$ be the event of the winning. Let $D_i$ be the event that the door $i$ is opened. Let $C_i$ be the event that the coor is behind door $i$. We have
+Let $W$ be the event of the winning. Let $D_i$ be the event that the door $i$ is opened. Let $C_i$ be the event that the car is behind door $i$. We have
 
 $$\begin{aligned}
   P(W) &= P(WD_2) + P(WD_3)\\
@@ -38,28 +40,28 @@ So $P(W|p=0.3)=`r pw(0.3)`$, $P(W|p=0.5)=`r pw(0.5)`$, $P(W|p=0.8)=`r pw(0.8)`$.
 
 #### Simulation Part
 
-Now, we run simulations to check our mathematic analysis.
+Now, we run simulations to check our mathematical analysis.
 
 ```{r}
 sim_pw <- function(p) {
   n <- 10^5
-  car <- sample(3,n,replace = TRUE)
+  car <- sample(3, n, replace=TRUE)
   # For simplicity of notations, we always choose door 1.
-  opened <- rep(0,n)
-  opened[car == 1] <- sample(c(2,3),sum(car==1),replace = TRUE,prob = c(p,1-p))
-  opened[car == 2] <- 3
-  opened[car == 3] <- 2
-  chosen <- rep(0,n)
-  chosen[opened == 2] <- 1  # opened door is 2, we do not switch
-  chosen[opened == 3] <- 2  # opened door is 3, we switch
-  sum(chosen == car)/n
+  opened <- rep(0, n)
+  opened[car==1] <- sample(c(2, 3), sum(car==1), replace=TRUE, prob=c(p, 1-p))
+  opened[car==2] <- 3
+  opened[car==3] <- 2
+  chosen <- rep(0, n)
+  chosen[opened==2] <- 1  # opened door is 2, we do not switch
+  chosen[opened==3] <- 2  # opened door is 3, we switch
+  sum(chosen==car) / n
 }
-cat(paste("sim_pw(0.3)=",pw3 <- sim_pw(0.3),"\n",
-          "sim_pw(0.5)=",pw5 <- sim_pw(0.5),"\n",
-          "sim_pw(0.8)=",pw8 <- sim_pw(0.8),sep = ""))
+p <- c(0.3, 0.5, 0.8)
+pw <- lapply(p, sim_pw)
+cat(sprintf("sim_pw(%.1f) = %f", p, pw), sep="\n")
 ```
 
-So the simulation results are $\widetilde P(W|p=0.3)=`r pw3`$, $\widetilde P(W|p=0.5)=`r pw5`$ and $\widetilde P(W|p=0.8)=`r pw8`$.
+So the simulation results are $\widetilde P(W|p=0.3)=`r pw[1]`$, $\widetilde P(W|p=0.5)=`r pw[2]`$ and $\widetilde P(W|p=0.8)=`r pw[3]`$.
 
 ## Variant 2
 
@@ -81,17 +83,18 @@ The winning probability of not switching is $P(S^cW|G) = 1-P(SW|G) = \frac{1}{2}
 
 #### Simulation Part
 
-Now, we run simulations to check our mathematic analysis.
+Now, we run simulations to check our mathematical analysis.
 
 ```{r}
 n <- 10^5
-car <- sample(3,n,replace = TRUE)
-monty <- sample(c(2,3),n,replace = TRUE)
+car <- sample(3, n, replace=TRUE)
+monty <- sample(c(2, 3), n, replace=TRUE)
 monty_goat <- monty != car
-win_sw <- monty_goat & car != 1  # win if switch?
-win_not_sw <- monty_goat & car == 1  # win if not switch?
-cat(paste("    p_sw=",p_sw <- sum(win_sw)/sum(monty_goat),"\n",
-          "p_not_sw=",p_not_sw <- sum(win_not_sw)/sum(monty_goat),sep = ""))
+win_sw <- monty_goat & car!=1  # win if switch?
+win_not_sw <- monty_goat & car==1  # win if not switch?
+p_sw <- sum(win_sw) / sum(monty_goat)
+p_not_sw <- sum(win_not_sw) / sum(monty_goat)
+cat(sprintf("%8s = %f", c("p_sw", "p_not_sw"), c(p_sw, p_not_sw)), sep="\n")
 ```
 
 So the simulation results are $\widetilde P(SW|G) = `r p_sw`$ and $\widetilde P(S^cW|G) = `r p_not_sw`$.
@@ -124,44 +127,41 @@ $$\begin{aligned}
 \end{aligned}$$
 
 ```{r include=FALSE}
-p_sw <- function(p) 2/3*p
+p_sw <- function(p) 2/3 * p
 p_not_sw <- function(p) 1/3
 ```
 So
-$$P(SW|D_2,p=0.3)=`r p_sw(0.3)`, P(S^cW|D_2,p=0.3)=`r p_not_sw(0.3)`;$$
-$$P(SW|D_2,p=0.5)=`r p_sw(0.5)`, P(S^cW|D_2,p=0.5)=`r p_not_sw(0.5)`;$$
-$$P(SW|D_2,p=0.8)=`r p_sw(0.8)`, P(S^cW|D_2,p=0.8)=`r p_not_sw(0.8)`.$$
+$$P(SW|D_2,p=0.3)=`r pf(p_sw(0.3))`, P(S^cW|D_2,p=0.3)=`r pf(p_not_sw(0.3))`;$$
+$$P(SW|D_2,p=0.5)=`r pf(p_sw(0.5))`, P(S^cW|D_2,p=0.5)=`r pf(p_not_sw(0.5))`;$$
+$$P(SW|D_2,p=0.8)=`r pf(p_sw(0.8))`, P(S^cW|D_2,p=0.8)=`r pf(p_not_sw(0.8))`.$$
 
 #### Simulation Part
 
-Now, we run simulations to check our mathematic analysis.
+Now, we run simulations to check our mathematical analysis.
 
 ```{r}
 sim_var3 <- function(p) {
   n <- 10^5
-  car <- sample(3,n,replace = TRUE)
-  point <- rep(0,n)
-  point[car==1] <- sample(c(2,3),sum(car==1),replace = TRUE)
-  point[car==2] <- sample(c(2,3),sum(car==2),replace = TRUE,prob = c(1-p,p))
-  point[car==3] <- sample(c(2,3),sum(car==3),replace = TRUE,prob = c(p,1-p))
+  car <- sample(3, n, replace=TRUE)
+  point <- rep(0, n)
+  point[car==1] <- sample(c(2, 3), sum(car==1), replace=TRUE)
+  point[car==2] <- sample(c(2, 3), sum(car==2), replace=TRUE, prob = c(1-p, p))
+  point[car==3] <- sample(c(2, 3), sum(car==3), replace=TRUE, prob = c(p, 1-p))
   p2 <- point==2
   win_sw <- p2 & car==3  # win if switch?
   win_not_sw <- p2 & car==1  # win if not switch?
-  c(sum(win_sw)/sum(p2),sum(win_not_sw)/sum(p2))
+  c(sum(win_sw)/sum(p2), sum(win_not_sw)/sum(p2))
 }
-sim3 <- sim_var3(0.3)
-sim5 <- sim_var3(0.5)
-sim8 <- sim_var3(0.8)
-cat(paste("Case p=0.3: ","p_sw=",sim3[1],", p_not_sw=",sim3[2],"\n",
-          "Case p=0.5: ","p_sw=",sim5[1],", p_not_sw=",sim5[2],"\n",
-          "Case p=0.8: ","p_sw=",sim8[1],", p_not_sw=",sim8[2],"\n",sep = ""))
+p <- c(0.3, 0.5, 0.8)
+sim <- sapply(p, sim_var3)
+cat(sprintf("Case p = %.1f: p_sw = %f, p_not_sw = %f", p, sim[1,], sim[2,]), sep="\n")
 ```
 
 So the simulation results are
 
-$$\widetilde P(SW|D_2,p=0.3)=`r sim3[1]`, \widetilde P(S^cW|D_2,p=0.3)=`r sim3[2]`;$$
-$$\widetilde P(SW|D_2,p=0.5)=`r sim5[1]`, \widetilde P(S^cW|D_2,p=0.5)=`r sim5[2]`;$$
-$$\widetilde P(SW|D_2,p=0.8)=`r sim8[1]`, \widetilde P(S^cW|D_2,p=0.8)=`r sim8[2]`.$$
+$$\widetilde P(SW|D_2,p=0.3)=`r sim[1,1]`, \widetilde P(S^cW|D_2,p=0.3)=`r sim[2,1]`;$$
+$$\widetilde P(SW|D_2,p=0.5)=`r sim[1,2]`, \widetilde P(S^cW|D_2,p=0.5)=`r sim[2,2]`;$$
+$$\widetilde P(SW|D_2,p=0.8)=`r sim[1,3]`, \widetilde P(S^cW|D_2,p=0.8)=`r sim[2,3]`.$$
 
 Our strategy is that switch if $p>0.5$, otherwise do not switch.
 
@@ -173,24 +173,149 @@ Suppose the car is not placed randomly behind the three doors. Instead, the car 
 
 #### Math Part
 
+For simplicity of notation, we assume the door we choose is door 1 and the door Month opens is door 2. Let $C_i$ be the event that the car is behind door $i$. Let $D_i$ be the event that Monty chooses door $i$. The winning probability of switching is
+
+$$\begin{aligned}
+  P(C_3|D_2) &= \frac{P(C_3D_2)}{P(D_2)}\\
+  &= \frac{P(C_3D_2)}{P(C_1D_2) + P(C_3D_2)}\\
+  &= \frac{p_3}{\frac{1}{2}p_1 + p_3}\\
+  &= \frac{2p_3}{p_1+2p_3}.
+\end{aligned}$$
+
+The winning probability of not switching is
+
+$$\begin{aligned}
+  P(C_1|D_2) &= \frac{P(C_1D_2)}{P(D_2)}\\
+  &= \frac{P(C_1D_2)}{P(C_1D_2) + P(C_3D_2)}\\
+  &= \frac{\frac{1}{2}p_1}{\frac{1}{2}p_1 + p_3}\\
+  &= \frac{p_1}{p_1+2p_3}.
+\end{aligned}$$
+
+```{r include=FALSE}
+p32 <- function(p) 2*p[3] / (p[1]+2*p[3])
+p12 <- function(p) p[1] / (p[1]+2*p[3])
+```
+
+So
+
+|$p_1,p_2,p_3$|$P(\text{win}\mid\text{switch})$|$P(\text{win}\mid\text{not switch})$|
+|:-------------:|:-------------:|:------------------:|
+|$`r paste(p <- c(0.5,0.3,0.2),sep = ",")`$|$`r p32(p)`$|$`r p12(p)`$|
+|$`r paste(p <- c(0.5,0.2,0.3),sep = ",")`$|$`r p32(p)`$|$`r p12(p)`$|
+|$`r paste(p <- c(0.3,0.5,0.2),sep = ",")`$|$`r p32(p)`$|$`r p12(p)`$|
+|$`r paste(p <- c(0.3,0.2,0.5),sep = ",")`$|$`r p32(p)`$|$`r p12(p)`$|
+|$`r paste(p <- c(0.2,0.5,0.3),sep = ",")`$|$`r p32(p)`$|$`r p12(p)`$|
+|$`r paste(p <- c(0.2,0.3,0.5),sep = ",")`$|$`r p32(p)`$|$`r p12(p)`$|
+
+Our strategy is switching if $p_\text{the door we choose}=0.5$ and $p_\text{the door Monty opens}=0.3$, otherwise not switching.
+
 #### Simulation Part
 
-Now, we run simulations to check our mathematic analysis.
+Now, we run simulations to check our mathematical analysis.
+
+```{r}
+sim_var4 <- function(p) {
+  n <- 10^5
+  car <- sample(3, n, replace=TRUE, prob=p)
+  monty <- rep(0, n)
+  monty[car==1] <- sample(c(2, 3), sum(car==1), replace=TRUE)
+  monty[car==2] <- 3
+  monty[car==3] <- 2
+  m2 <- monty==2
+  win_sw <- m2 & car==3
+  win_not_sw <- m2 & car==1
+  c(sum(win_sw)/sum(m2), sum(win_not_sw)/sum(m2))
+}
+ps <- list(
+  c(0.5, 0.3, 0.2), c(0.5, 0.2, 0.3),
+  c(0.3, 0.5, 0.2), c(0.3, 0.2, 0.5),
+  c(0.2, 0.5, 0.3), c(0.2, 0.3, 0.5)
+)
+p4 <- sapply(ps, sim_var4)
+cat(sprintf("p=%s: p_sw = %f, p_not_sw = %f", ps, p4[1,], p4[2,]), sep="\n")
+```
+
+So the simulation results are
+
+|$p_1,p_2,p_3$|$\widetilde P(\text{win}\mid\text{switch})$|$\widetilde P(\text{win}\mid\text{not switch})$|
+|:-------------:|:-------------:|:------------------:|
+|$0.5,0.3,0.2$|$`r p4[1,1]`$|$`r p4[2,1]`$|
+|$0.5,0.2,0.3$|$`r p4[1,2]`$|$`r p4[2,2]`$|
+|$0.3,0.5,0.2$|$`r p4[1,3]`$|$`r p4[2,3]`$|
+|$0.3,0.2,0.5$|$`r p4[1,4]`$|$`r p4[2,4]`$|
+|$0.2,0.5,0.3$|$`r p4[1,5]`$|$`r p4[2,5]`$|
+|$0.2,0.3,0.5$|$`r p4[1,6]`$|$`r p4[2,6]`$|
 
 ## Variant 5
 
 This time we assume there are $n$ identical doors, where $n$ is an integer satisfying $n \geq 3$. One door conceals a car, the other $n - 1$ doors conceal goats. You choose one of the doors at random but do not open it. Monty then opens a door he knows to conceal a goat, always choosing randomly among the available doors. At this point he gives you the option either of sticking with your original door or switching to one of the remaining doors. You make your decision. Monty now eliminates another goat-concealing door (at random) and once more gives you the choice either of sticking or switching. This process continues until only two doors remain in play. What strategy should you follow to maximize your chances of winning? Use simulation results to show your strategy and corresponding winning probability. Test scenarios with $n = 100,1000$.
 
 - ``Switch at the last minute'' (SLM) strategy: stick with your initial choice until only two doors remain, and then switch. Under the SLM strategy, What is the probability of getting the car?
-- ``Switching all the time'' (SAT) strategy: every time Monty reveals a goat, we select randomly from among the unopened doors different from our current choice. Under the SLM strategy, What is the probability of getting the car?
+- ``Switching all the time'' (SAT) strategy: every time Monty reveals a goat, we select randomly from among the unopened doors different from our current choice. Under the SAT strategy, What is the probability of getting the car?
 
 ### Solution
 
 #### Math Part
 
+For SLM strategy, when only two doors remain, the probability of our initial choice is $\frac{1}{n}$. Therefore, the probability of the other is $1-\frac{1}{n}$. The winning probability is
+
+$$P(\text{win}|\text{SLM},n=100) = 0.99, P(\text{win}|\text{SLM},n=1000) = 0.999.$$
+
+For SAT strategy, the probability is approximately 0.5. When $n$ is small, we have
+
+$$P(\text{win}|\text{SAT},n=2) = \frac{1}{2} = 0.5$$
+$$P(\text{win}|\text{SAT},n=3) = \frac{2}{3} = `r 2/3`$$
+$$P(\text{win}|\text{SAT},n=4) = \frac{5}{8} = `r 5/8`$$
+
 #### Simulation Part
 
-Now, we run simulations to check our mathematic analysis.
+Now, we run simulations to check our mathematical analysis.
+```{r}
+slm <- function(n) {
+  doors <- 1:n
+  car <- sample(n, 1)
+  chosen <- sample(n, 1)
+  doors <- doors[-c(car, chosen)]
+  doors <- doors[-sample(length(doors), n-2)]
+  if (chosen == car) doors <- c(doors, car)
+  else doors <- c(doors, car, chosen)
+  chosen <- doors[doors != chosen]
+  chosen == car
+}
+
+sat <- function(n) {
+  doors <- 1:n
+  car <- sample(n, 1)
+  chosen <- sample(n, 1)
+  for (k in 1:(n-2)) {
+    doors <- doors[!doors %in% c(car, chosen)]
+    opened <- sample(length(doors), 1)
+    doors <- doors[-opened]
+    if (chosen == car) {
+      chosen <- doors[sample(length(doors), 1)]
+      doors <- c(doors, car)
+    } else {
+      doors <- c(doors, car)
+      old_chosen <- chosen
+      chosen <- doors[sample(length(doors), 1)]
+      doors <- c(doors, old_chosen)
+    }
+  }
+  chosen == car
+}
+p5 <- function(n, t, strategy) sum(replicate(t, strategy(n))) / t
+cat(sprintf(paste("Case n =  100, p_slm = %f, p_sat = %f",
+                  "Case n = 1000, p_slm = %f, p_sat = %f", sep="\n"),
+            slm100 <- p5(100, 1000, slm), sat100 <- p5(100, 1000, sat),
+            slm1000 <- p5(1000, 1000, slm), sat1000 <- p5(1000, 1000, sat)))
+```
+
+So the simulation results are
+
+$$\widetilde P(\text{win}|\text{SLM},n=100) = `r pf(slm100)`, \widetilde P(\text{win}|\text{SAT},n=100) = `r pf(sat100)`;$$
+$$\widetilde P(\text{win}|\text{SLM},n=1000) = `r pf(slm1000)`, \widetilde P(\text{win}|\text{SAT},n=1000) = `r pf(sat1000)`.$$
+
+We should use the SLM strategy.
 
 ## Variant 6
 
@@ -200,9 +325,48 @@ As before, this time we still have $n$ doors, but now there are $1 \leq j \leq n
 
 #### Math Part
 
+Let $M$ be the event that Monty opens the car door. Let $S$ be the event that we switch. Let $W$ be the event of winning. The winning probability of switching is
+
+$$\begin{aligned}
+  P(W|S) &= P(WM|S) + P(WM^c|S)\\
+  &= \frac{j}{n}\frac{j-1-\frac{j}{n}}{n-2} + \frac{n-j}{n}\frac{j-\frac{j}{n}}{n-2}\\
+  &= \frac{j}{n}.
+\end{aligned}$$
+
+The winning probability of not switching is $P(W|S^c) = \frac{j}{n}$ also. Therefore, to switch or not switch, it's same.
+
 #### Simulation Part
 
-Now, we run simulations to check our mathematic analysis.
+Now, we run simulations to check our mathematical analysis.
+
+```{r}
+sim_var6 <- function(n, j) {
+  sw <- function() {
+    cars <- sample(n, j)
+    chosen <- sample(n, 1)
+    doors <- (1:n)[-chosen]
+    doors <- doors[-sample(length(doors), 1)]  # Monty opened a door
+    chosen <- sample(doors, 1)  # switch
+    chosen %in% cars
+  }
+  not_sw <- function() {
+    cars <- sample(n, j)
+    chosen <- sample(n, 1)
+    doors <- (1:n)[-chosen]
+    doors <- doors[-sample(length(doors), 1)]
+    chosen %in% cars
+  }
+  t <- 10000
+  p_sw <- sum(replicate(t, sw())) / t
+  p_not_sw <- sum(replicate(t, not_sw())) / t
+  c(p_sw, p_not_sw)
+}
+js <- c(20, 50, 70)
+p6 <- sapply(js, function(j) sim_var6(100, j))
+cat(sprintf("Case n=100, j=%d: p_sw = %f, p_not_sw = %f", js, p6[1,], p6[2,]), sep="\n")
+```
+
+So the simulation results are coherent with our math analysis.
 
 ## Variant 7
 
@@ -212,6 +376,49 @@ As before, this time we still have $n$ doors, but now there are $1 \leq j \leq n
 
 #### Math Part
 
+Let $W$ be the event of winning. Let $S$ be the event of switching. Let $M$ be the event that Monty opens $k$ cars and $m-k$ goats. The winning probability of switching is
+
+$$P(W|MS) = \frac{j-k}{n-m}.$$
+
+The winning probability of not switching is
+
+$$P(W|M^S) = \frac{j-k}{n-m}.$$
+
+Therefore, to switch or not switch, it's same.
+
 #### Simulation Part
 
-Now, we run simulations to check our mathematic analysis.
+Now, we run simulations to check our mathematical analysis.
+
+```{r}
+sim_var7 <- function(n, j, m, k) {
+  sw <- function() {
+    cars <- sample(n, j)
+    goats <- (1:n)[!(1:n) %in% cars]
+    chosen <- sample(n, 1)
+    cars_opened <- sample(cars[cars != chosen], k)
+    goats_opened <- sample(goats[goats != chosen], m-k)
+    doors_remain <- c(cars[!cars %in% cars_opened], goats[!goats %in% goats_opened])
+    chosen <- sample(doors_remain, 1)
+    chosen %in% cars
+  }
+  not_sw <- function() {
+    cars <- sample(n, j)
+    goats <- (1:n)[!(1:n) %in% cars]
+    chosen <- sample(n, 1)
+    cars_opened <- sample(cars[cars != chosen], k)
+    goats_opened <- sample(goats[goats != chosen], m-k)
+    chosen %in% cars
+  }
+  t <- 10000
+  p_sw <- sum(replicate(t, sw())) / t
+  p_not_sw <- sum(replicate(t, not_sw())) / t
+  c(p_sw, p_not_sw)
+}
+njmk <- list(as.list(c(100, 10, 15, 3)),
+             as.list(c(100, 50, 30, 15)))
+p7 <- sapply(njmk, function(a) do.call(sim_var7, a))
+cat(sprintf("Case n,j,m,k = %21s: p_sw = %f, p_not_sw = %f", njmk, p7[1,], p7[2,]), sep="\n")
+```
+
+So the simulation results are coherent with our math analysis.
