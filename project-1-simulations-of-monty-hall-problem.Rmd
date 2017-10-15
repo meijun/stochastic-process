@@ -1,6 +1,6 @@
 ---
 title: 'Project 1: Simulations of Monty Hall Problem'
-author: "Jun Mei"
+author: "Jun Mei (90884092)"
 date: "October 11, 2017"
 output:
   pdf_document: default
