@@ -1,0 +1,501 @@
+---
+title: 'Stochastic Processes: Final Projects'
+author: "Jun Mei (90884092)"
+date: "January 21, 2018"
+output: pdf_document
+---
+
+## Simulation of M/M/1 queue (30 points)
+
+Suppose that the arrival rate is $\lambda = 2$ jobs/min. Adjust the service rate $\mu$ as needed to create the the following three kinds of traffic intensity $\rho = \lambda / \mu$: $\rho = 0.4, 0.8, 1$. Run your simulation under each scenario for a long time to measure
+
+- the mean and variance of the number of jobs in the system
+- the mean response time of jobs in the system
+- the mean queuing time of jobs in the system
+
+Then compare your results with theoretic results on the above performance metrics. What is more, check whether little's law hold for all three scenarios.
+
+### Theoretic part
+
+- The mean and variance of the number of jobs in the system are $\rho / (1 - \rho)$ and $\rho / (1 - \rho)^2$.
+- The mean response time of jobs in the system is $1 / (\mu - \lambda)$.
+- The mean queuing time of jobs in the system is $\rho / (\mu - \lambda)$.
+
+For $\rho = 0.4, 0.8, 1$, we have
+
+```{r}
+theoretic_queue <- function(rho) {
+  lambda <- 2
+  mu <- lambda / rho
+  e_cnt <- rho / (1 - rho)
+  var_cnt <- rho / (1 - rho) ^ 2
+  e_resp <- 1 / (mu - lambda)
+  e_queu <- rho / (mu - lambda)
+  cat(sprintf("rho = %s:\n", rho),
+      sprintf("  mean(#jobs)    = %.3f, var(#jobs) = %.3f\n", e_cnt, var_cnt),
+      sprintf("  mean(response) = %.3f\n", e_resp),
+      sprintf("  mean(queuing)  = %.3f\n", e_queu))
+}
+theoretic_queue(0.4)
+theoretic_queue(0.8)
+theoretic_queue(1.0)
+```
+
+Note that when $\rho = 1$, the system explodes.
+
+### Simulation part
+
+```{r}
+sim_queue <- function(rho) {
+  set.seed(0)
+  n_job <- 1000000
+  lambda <- 2
+  mu <- lambda / rho
+  jobs <- rexp(n_job, lambda)
+  srvs <- rexp(n_job, mu)
+  
+  arrivals <- cumsum(jobs)
+  starts <- rep(0, n_job)
+  ends <- rep(0, n_job)
+  for (i in 1:n_job) {
+    last_end <- if (i == 1) 0 else ends[i - 1]
+    starts[i] <- max(last_end, arrivals[i])
+    ends[i] <- starts[i] + srvs[i]
+  }
+  
+  lens <- rep(0, n_job * 2)
+  cnts <- rep(0, n_job * 2)
+  dots <- c(arrivals, ends)
+  last_end <- 0
+  last_cnt <- 0
+  for (i in order(dots)) {
+    lens[i] <- dots[i] - last_end
+    cnts[i] <- last_cnt
+    last_end <- dots[i]
+    last_cnt <- last_cnt + (if (i > n_job) -1 else 1)
+  }
+  
+  e_cnt <- weighted.mean(cnts, lens)
+  e_cnt2 <- weighted.mean(cnts ^ 2, lens)
+  var_cnt <- e_cnt2 - e_cnt ^ 2
+  
+  queus <- starts - arrivals
+  resps <- ends - arrivals
+  e_resp <- mean(resps)
+  e_queu <- mean(queus)
+  
+  cat(sprintf("rho = %s, t = %.3f:\n", rho, last_end),
+      sprintf("  mean(#jobs)    = %.3f, var(#jobs) = %.3f\n", e_cnt, var_cnt),
+      sprintf("  mean(response) = %.3f\n", e_resp),
+      sprintf("  mean(queuing)  = %.3f\n", e_queu),
+      sprintf("  for little's law: L = %.3f, W = %.3f\n", e_cnt, e_resp))
+}
+sim_queue(0.4)
+sim_queue(0.8)
+sim_queue(1.0)
+```
+
+We can see that all the results simulated match the theoretic results.
+
+### Collaborators
+
+- Jun Li
+
+### References
+
+[1]. https://en.wikipedia.org/wiki/M/M/1_queue
+
+\pagebreak
+
+## Load balancing in cloud computing (30 points)
+
+We consider a Google data center network with $n$ identical servers and a central scheduler (role of load balancing). Each arrival is a job consisting of many tasks, each of which can be executed in parallel in possibly different servers. Each server can process one task at a time. Each job (batch of tasks) consists of $m$ tasks and the job arrival process is a Poisson process with rate $\frac{n}{m}\lambda$. The scheduler dispatches the tasks to the servers when a job arrives. The service times of the tasks are exponentially distributed with mean 1, and are independent across tasks. When a task arrives at a server, it is processed immediately if the server is idle or waits in a FIFO (first-in-first-out) queue if the server is busy. Run your simulation to compare the following three load-balancing policies:
+
+- **Random**: when a batch of $m$ tasks arrive, the scheduler picks one server uniformly at random for each task and then dispatch the task to that server.
+- **The-power-of-d-choices**: when a batch of $m$ tasks arrive, the scheduler probes $d$ servers uniformly at random to acquire their queue lengths for each task. The task is routed to the least loaded server.
+- **Batch-sampling**: when a batch of $m$ tasks arrive, the scheduler probes $dm$ servers uniformly at random to acquire their queue lengths. The $m$ tasks are added to the the least loaded $m$ servers, one for each server.
+
+We consider systems with $n = 5000$ servers, batch size $m = 50$. There are different probe ratios $d (1 \leq d \leq 5)$ and three possible values of $\lambda = 0.4, 0.7, 0.9$. Evaluate the average task response time and average job response time for the three load-balancing policies.
+
+(a) Plot the simulation results using ggplot2 package. (10 points)
+(b) Which load balancing policy is optimal? Please give an intuitive explanation. (10 points)
+(c) Try your best to show the optimality of some load balancing policy in theory. (5 points)
+(d) Please report any other interesting observations and provide corresponding intuitive explanations. (5 points)
+
+### Simulation (a) (10 points)
+
+All the methods are simulated with the following framework.
+
+```{r}
+sim_load <- function(d, lambda, n_job, calc_server_ids) {
+  set.seed(0)
+  n <- 5000
+  m <- 50
+  job_starts <- cumsum(rexp(n_job, n / m * lambda))
+  task_starts <- matrix(job_starts, nrow = m, ncol = n_job, byrow = TRUE)
+  task_cons <- matrix(rexp(n_job * m, 1), nrow = m)
+  
+  task_ends <- matrix(0, nrow = m, ncol = n_job)
+  q_lens <- rep(0, n)
+  queues <- list()
+  for (i in 1:n) queues[[i]] <- integer()
+  server_lasts <- rep(0, n)
+  do_task <- function(until) {
+    for (sid in 1:n) {
+      while (q_lens[sid] > 0) {
+        tid <- queues[[sid]][1]
+        last <- max(task_starts[tid], server_lasts[sid]) + task_cons[tid]
+        if (last > until) break
+        queues[[sid]] <<- queues[[sid]][-1]
+        q_lens[sid] <<- q_lens[sid] - 1
+        task_ends[tid] <<- last
+        server_lasts[sid] <<- last
+      }
+    }
+  }
+  for (jid in 1:n_job) {
+    do_task(job_starts[jid])
+    server_ids <- calc_server_ids(n, m, d, q_lens)
+    for (ti in 1:m) {
+      tid <- (jid - 1) * m + ti
+      sid <- server_ids[ti]
+      queues[[sid]] <- c(queues[[sid]], tid)
+      q_lens[sid] <- q_lens[sid] + 1
+    }
+  }
+  do_task(Inf)
+
+  job_ends <- apply(task_ends, 2, max)
+  task_e_resp <- mean(task_ends - task_starts)
+  job_e_resp <- mean(job_ends - job_starts)
+  c(task_e_resp, job_e_resp)
+}
+```
+
+#### Random
+
+```{r}
+by_random <- function(n, m, d, q_lens) sample(n, size = m)
+```
+
+#### The-power-of-d-choices
+
+```{r}
+by_choice <- function(n, m, d, q_lens) {
+  d_servers <- matrix(replicate(m, sample(n, size = d)), nrow = d)
+  d_cnts <- matrix(q_lens[d_servers], nrow = d)
+  server_ids <- d_servers[cbind(apply(d_cnts, 2, which.min), 1:m)]
+  server_ids
+}
+```
+
+#### Batch-sampling
+
+```{r}
+by_batch <- function(n, m, d, q_lens) {
+  d_servers <- sample(n, size = d * m)
+  d_cnts <- q_lens[d_servers]
+  server_ids <- d_servers[order(d_cnts)[1:m]]
+  server_ids
+}
+```
+
+#### Visualization
+
+```{r}
+Method <- character()
+Lambda <- double()
+D <- integer()
+Type <- character()
+Time <- double()
+for (lambda in c(0.4, 0.7, 0.9)) {
+  n_job <- 1000
+  r <- sim_load(0, lambda, n_job, by_random)
+  Method <- c(Method, rep("Random", 2))
+  Lambda <- c(Lambda, rep(lambda, 2))
+  D <- c(D, rep(0, 2))
+  Type <- c(Type, "Task", "Job")
+  Time <- c(Time, r)
+  for (d in 1:5) {
+    rc <- sim_load(d, lambda, n_job, by_choice)
+    rb <- sim_load(d, lambda, n_job, by_batch)
+    Method <- c(Method, rep(c("Choice", "Batch"), each = 2))
+    Lambda <- c(Lambda, rep(lambda, 4))
+    D <- c(D, rep(d, 4))
+    Type <- c(Type, rep(c("Task", "Job"), 2))
+    Time <- c(Time, rc, rb)
+  }
+}
+res <- data.frame(Method = Method, Lambda = Lambda, D = D, Type = Type, Time = Time)
+```
+```{r}
+library(ggplot2)
+
+ggplot(res[res$Type == "Task",], aes(x = D, y = Time, color = Lambda, shape = Method)) +
+  geom_point() + geom_line(aes(group = interaction(Method, Lambda))) +
+  labs(title = "Average Task Response Time (1k Jobs)")
+
+ggplot(res[res$Type == "Job",], aes(x = D, y = Time, color = Lambda, shape = Method)) +
+  geom_point() + geom_line(aes(group = interaction(Method, Lambda))) +
+  labs(title = "Average Job Response Time (1k Jobs)")
+```
+
+### Optimal policy (b) (10 points)
+
+Batch-sampling (Batch) is optimal. Batch is better than The-Power-of-d-choices (Choice), and Choice is significantly better than Random. First, Random is not optimal, because the tasks are often dispatched to some same servers, even there are some empty servers. Choice is significantly better than Random, because Choice choose the least loaded server in $d$ choices, such that there are few empty servers. Batch is better than Choice, because (i) Choice tasks in the same job are more likely to be dispatched to some same servers and (ii) the choices of Choice tasks are made in a very small area.
+
+### Optimality (c) (5 points)
+
+We can prove that the average task response time should less or equal to 1, and the average job response time should less or equal to $\sum_{k=1}^m 1/k \approx 4.499$, which our simulations match.
+
+Suppose we have infinite many servers. The probability of more than 1 tasks on a server is 0. All tasks and all jobs are independent now. Let $W$ be the time of the processing of certain job. Let $X_k \sim Expo(1)$ be the time of the processing of the $k$-th task in the job. We have
+
+$$\begin{aligned}
+  E(E(X_k | k)) = E(X_1) = 1,
+\end{aligned}$$
+
+and
+
+$$\begin{aligned}
+  W = max(X_1, X_2, \ldots, X_m) \sim Y_1 + Y_2 + \cdots + Y_m,
+\end{aligned}$$
+
+where $Y_k \sim Expo(k)$. Therefore,
+
+$$\begin{aligned}
+  E(W) &= E(Y_1 + Y_2 + \cdots + Y_m) \\
+  &= E(Y_1) + E(Y_2) + \cdots + E(Y_m) \\
+  &= 1 + \frac{1}{2} + \cdots + \frac{1}{m}\\
+  &\approx 4.499.
+\end{aligned}$$
+
+### Observations (d) (5 points)
+
+- Batch and Choice are similar with Random when d is 1, because one-choice means no choice.
+- 2-choices are much better than Random, because we can make choices now.
+
+\pagebreak
+
+## Markov chain Monte Carlo for wireless networks (30 points)
+
+Given a wireless network with 24 links and 0-1 interference model, i.e., any two links are either interfere with each other or not. To describe the interference relationship between wireless links, we introduce the conflict graph model. In such model, the vertex of the conflict graph represents the wireless link. An edge between two vertices means corresponding two links interfere with each other. The following Figure shows the corresponding conflict graph for 24-link wireless network. You are required to find the maximum independent set of the conflict graph, i.e., the largest set of wireless links that can simultaneously transmit without interferences. Design the algorithm by MCMC method and evaluate your algorithm.
+
+(a) Show your MCMC Design with a discrete Markov chain. Use both theory and simulation results to justify your algorithms. (20 points)
+(b) Try to quantify the convergence time of your algorithm via the theory of mixing time for the discrete time Markov chain. (10 points)
+(c) Show your MCMC Design with a continuous Markov chain. Use both theory and simulation results to justify your algorithms. (20 points)
+
+### MCMC design (a) (10 points)
+
+Build graph.
+
+```{r}
+n <- 24
+link_fr <- rep(1:n, each = 3)
+link_to <- c(5, 9, 13, 6, 10, 14, 7, 11, 15, 8, 12, 16, 9, 1, 17, 10, 2, 18,
+             11, 3, 19, 12, 4, 20, 1, 5, 21, 2, 6, 22, 3, 7, 23, 4, 8, 24,
+             1, 14, 24, 2, 15, 13, 3, 16, 14, 4, 17, 15, 5, 18, 16, 6, 19, 17,
+             7, 20, 18, 8, 21, 19, 9, 22, 20, 10, 23, 21, 11, 24, 22, 12, 13, 23)
+graph <- matrix(0, nrow = n, ncol = n)
+graph[cbind(link_fr, link_to)] <- 1
+is_indep <- function(x) sum((x %o% x) * graph) == 0
+```
+
+We use all independent sets as the states $s$. The score of state $i$ is the size of its corresponding independent set. Two states have a link if they are able to become each other by changing one vertex. Therefore the transition matrix $P = (p_{ij}) = (1 / n_i)$ where $n_i$ is the neighbors of state $i$. The MCMC is designed using the log-sum-exp approximation.
+
+```{r}
+sim_mcmc <- function(n_step, beta) {
+  set.seed(0)
+  neis <- function(x) sum(sapply(1:n, function(id) {
+    x[id] <- !x[id]
+    is_indep(x)
+  }))
+  i <- rep(0, n)
+  si <- exp(beta * 0)
+  ni <- neis(i)
+  max_ind <- 0
+  maxs <- integer()
+  for (kth in 1:n_step) {
+    repeat {
+      j <- i
+      j_id <- sample(n, size = 1)
+      j[j_id] <- !j[j_id]
+      if (is_indep(j)) break
+    }
+    cj <- sum(j)
+    max_ind <- max(max_ind, cj)
+    sj <- exp(beta * cj)
+    nj <- neis(j)
+    aij <- min(sj * (1 / nj) / (si * (1 / ni)), 1)
+    if (rbinom(1, size = 1, aij)) {
+      i <- j
+      si <- sj
+      ni <- nj
+    }
+    maxs <- c(maxs, sum(i))
+  }
+  maxs
+}
+betas <- c(0.5, 1, 1.5)
+tot_step <- 50
+sizes <- unlist(lapply(betas, function(beta) sim_mcmc(tot_step, beta)))
+mcmc_res <- data.frame(Beta = rep(betas, each = tot_step),
+                       Step = rep(1:tot_step, length(betas)),
+                       Size = sizes)
+cat(sprintf("The size of the maximum independent set is %d.\n", max(sizes)))
+```
+
+We can plot the sizes when MCMC running.
+
+```{r}
+library(ggplot2)
+ggplot(mcmc_res, aes(x = Step, y = Size, color = Beta, group = Beta)) +
+  geom_line() + geom_point() + labs(title = "Size of Independent Set i")
+```
+
+The figure shows that when $\beta = 1$, the efficiency of MCMC is best.
+
+### Quantify convergence time (b) (10 points)
+
+The mixing time $t_{mix}(\epsilon)$ is the minimal time such that no mater where we started, for $n \geq t_{mix}(\epsilon)$ we have $||\pi_n - \pi^\ast||_{TV} = ||\pi_n - \pi^\ast||_1 \leq \epsilon$. If $P$ is reversible it has an eigen-decomposition with $1 = \lambda_1 > \lambda_2 \geq \cdots \geq \lambda_{|X|} > -1$. Define $\lambda_\ast = max\{\lambda_2, |\lambda_{|X|}|\}.$ We have 
+
+$$\begin{aligned}
+  t_{mix}(\epsilon) &\leq \log(\frac{1}{\epsilon \min_i\pi^\ast(i)})\frac{1}{1 - \lambda_\ast},\\
+  t_{mix}(\epsilon) &\geq \log(\frac{1}{2\epsilon})\frac{\lambda_\ast}{1 - \lambda_\ast}.
+\end{aligned}$$
+
+### Continuous Markov chain (c) (20 points)
+
+Aside from the discrete time MCMC, we add a set of rates $v = (1, 1, \ldots, 1)$.
+
+```{r}
+sim_ctmcmc <- function(n_step, beta) {
+  set.seed(0)
+  neis <- function(x) sum(sapply(1:n, function(id) {
+    x[id] <- !x[id]
+    is_indep(x)
+  }))
+  i <- rep(0, n)
+  si <- exp(beta * 0)
+  ni <- neis(i)
+  max_ind <- 0
+  maxs <- integer()
+  for (kth in 1:n_step) {
+    sit <- rexp(1, 1)
+    repeat {
+      j <- i
+      j_id <- sample(n, size = 1)
+      j[j_id] <- !j[j_id]
+      if (is_indep(j)) break
+    }
+    cj <- sum(j)
+    max_ind <- max(max_ind, cj)
+    sj <- exp(beta * cj)
+    nj <- neis(j)
+    aij <- min(sj * (1 / nj) / (si * (1 / ni)), 1)
+    if (rbinom(1, size = 1, aij)) {
+      i <- j
+      si <- sj
+      ni <- nj
+    }
+    maxs <- c(maxs, sum(i))
+  }
+  maxs
+}
+betas <- c(0.5, 1, 1.5)
+tot_step <- 50
+sizes <- unlist(lapply(betas, function(beta) sim_ctmcmc(tot_step, beta)))
+mcmc_res <- data.frame(Beta = rep(betas, each = tot_step),
+                       Step = rep(1:tot_step, length(betas)),
+                       Size = sizes)
+cat(sprintf("The size of the maximum independent set is %d.\n", max(sizes)))
+```
+
+We can plot the sizes when MCMC running.
+
+```{r}
+library(ggplot2)
+ggplot(mcmc_res, aes(x = Step, y = Size, color = Beta, group = Beta)) +
+  geom_line() + geom_point() + labs(title = "Size of Independent Set i")
+```
+
+### References
+
+[1]. http://www.wisdom.weizmann.ac.il/~ethanf/MCMC/stochastic%20optimization.pdf
+
+\pagebreak
+
+## Find the number of all possible graph colorings (50 points)
+
+$G$ is a graph shown as follows. We have a set of $k$ colors. A $k$-coloring of the graph is an assignment of a color to each node, such that two nodes joined by an edge cannot be the same color. Counting the number of all possible $k$-colorings via MCMC method.
+
+(a) When $k = 4$, show the best results of your algorithm and compare it to the theory value 72. (20 points)
+(b) When $k = 5$, show the best results of your algorithm and compare it to the theory value 240. (10 points)
+(c) Provide suggestions to improve the approximation accuracy of MCMC method. (20 points)
+
+### Simulation
+
+```{r}
+n <- 4
+graph <- matrix(as.logical(c(1, 1, 0, 0,
+                             1, 1, 1, 1,
+                             0, 1, 1, 1,
+                             0, 1, 1, 1)), nrow = n)
+
+sim_color <- function(n_step, k) {
+  library(hash)
+  set.seed(0)
+  neis <- function(x) sum(sapply(1:n, function(id) k - length(unique(x[graph[id, ]]))))
+  i <- 1:n
+  ni <- neis(i)
+  ss <- hash()
+  means <- double()
+  for (kth in 1:n_step) {
+    repeat {
+      j <- i
+      j_id <- sample(n, size = 1)
+      not_ava <- unique(j[graph[j_id, ]])
+      ava <- (1:k)[-not_ava]
+      if (length(ava) > 0) {
+        new_cl <- ava[sample(length(ava), 1)]
+        j[j_id] <- new_cl
+        break
+      }
+    }
+    
+    nj <- neis(j)
+    aij <- min(1 * (1 / nj) / (1 * (1 / ni)), 1)
+    if (rbinom(1, size = 1, aij)) {
+      i <- j
+      ni <- nj
+    }
+    hk <- paste(j, collapse = "")
+    ss[[hk]] <- (if (is.null(ss[[hk]])) 0 else ss[[hk]]) + 1
+    means <- c(means, mean(sum(values(ss)) / values(ss)))
+  }
+  means
+}
+n_step <- 50000
+res_k4 <- sim_color(n_step, 4)
+res_k5 <- sim_color(n_step, 5)
+```
+
+#### k = 4 (a) (20 points)
+
+```{r}
+ids <- 100 * 1:(n_step / 100)
+k4df <- data.frame(Step = ids, Result = res_k4[ids])
+ggplot(k4df, aes(x = Step, y = Result)) + geom_line() + labs(title = "Results of k = 4")
+```
+
+#### k = 5 (b) (10 points)
+
+```{r}
+ids <- 100 * 1:(n_step / 100)
+k5df <- data.frame(Step = ids, Result = res_k5[ids])
+ggplot(k5df, aes(x = Step, y = Result)) + geom_line() + labs(title = "Results of k = 5")
+```
+
+### Suggestions (c) (20 points)
+
+- Give more accurate original transition matrix $P = (p_{ij})$.
+- Give more accurate relations between states, which requires the structure of the problem.
